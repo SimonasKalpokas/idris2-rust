@@ -141,7 +141,7 @@ rustConstant (B8 m) = "IdrisType::Int(\{show m})"
 rustConstant (B16 m) = "IdrisType::Int(\{show m})"
 rustConstant (B32 m) = "IdrisType::Int(\{show m})"
 rustConstant (B64 m) = "IdrisType::Int(\{show m})"
-rustConstant (Str str) = "IdrisType::String(\{show str})"
+rustConstant (Str str) = "IdrisType::String(\{show str}.to_string())"
 rustConstant (Ch c) = "IdrisType::Char(\{show c})"
 rustConstant (Db dbl) = "IdrisType::Double(\{show dbl})"
 rustConstant (PrT pty) = "TODO: resolve rustConstant PrT, got value: " ++ show pty
@@ -232,12 +232,9 @@ rustStatementsFromANF (ALet fc var value body) = do
   coreLift $ putStrLn $ defStr
   rustStatementsFromANF body
 rustStatementsFromANF (ACon fc name coninfo tag args) = do
-        if coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
-            then pure "Box::new(()) as Box<dyn Any> /* \{show name} \{show coninfo} */"
-            else do
-                let argsStr = String.Extra.join ",\n" $ 
-                    mapWithIndex (\ind, x => "v\{show ind}: \{"&val_" ++ show x}") args 
-                pure "Box::new(\{rustName name} {\n\{argsStr}\n}) as Box<dyn Any>"
+  let argsStr = String.Extra.join ", " $ 
+    mapWithIndex (\ind, x => "\{"val_" ++ show x}.clone()") args 
+  pure "IdrisType::Struct(\{maybe "-1" show tag}, vec![\{argsStr}])"
 rustStatementsFromANF (AOp fc _ op args) = do 
   let argsStr = map (\x => "&val_" ++ show x) args 
   let ret = rustOp op argsStr
