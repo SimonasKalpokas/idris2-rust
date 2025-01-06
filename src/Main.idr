@@ -144,12 +144,8 @@ rustConstant (B64 m) = "IdrisType::Int(\{show m})"
 rustConstant (Str str) = "IdrisType::String(\{show str}.to_string())"
 rustConstant (Ch c) = "IdrisType::Char(\{show c})"
 rustConstant (Db dbl) = "IdrisType::Double(\{show dbl})"
-rustConstant (PrT pty) = "TODO: resolve rustConstant PrT, got value: " ++ show pty
-rustConstant WorldVal = "TODO: resolve rustConstant WorldVal"
-
-varName : AVar -> String
-varName (ALocal i) = "var_" ++ (show i)
-varName (ANull)    = "NULL"
+rustConstant (PrT pty) = "todo!(\"resolve rustConstant PrT, got value: " ++ show pty ++ "\")"
+rustConstant WorldVal = "IdrisType::World"
 
 cPrimType : PrimType -> String
 cPrimType IntType = "Int64"
@@ -168,64 +164,62 @@ cPrimType DoubleType = "Double"
 cPrimType WorldType = "void"
 
 rustOp : {0 arity : Nat} -> PrimFn arity -> Vect arity String -> String
-rustOp (Neg ty)      [x]       = "idris2_negate_"  ++  cPrimType ty ++ "(" ++ x ++ ")"
-rustOp StrLength     [x]       = "stringLength(" ++ x ++ ")"
-rustOp StrHead       [x]       = "head(" ++ x ++ ")"
-rustOp StrTail       [x]       = "tail(" ++ x ++ ")"
-rustOp StrReverse    [x]       = "reverse(" ++ x ++ ")"
-rustOp (Cast i o)    [x]       = "idris2_cast_" ++ (cPrimType i) ++ "_to_" ++ (cPrimType o) ++ "(" ++ x ++ ")"
-rustOp DoubleExp     [x]       = "idris2_mkDouble(exp(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleLog     [x]       = "idris2_mkDouble(log(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoublePow     [x, y]    = "idris2_mkDouble(pow(idris2_vp_to_Double(" ++ x ++ "), idris2_vp_to_Double(" ++ y ++ ")))"
-rustOp DoubleSin     [x]       = "idris2_mkDouble(sin(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleCos     [x]       = "idris2_mkDouble(cos(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleTan     [x]       = "idris2_mkDouble(tan(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleASin    [x]       = "idris2_mkDouble(asin(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleACos    [x]       = "idris2_mkDouble(acos(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleATan    [x]       = "idris2_mkDouble(atan(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleSqrt    [x]       = "idris2_mkDouble(sqrt(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleFloor   [x]       = "idris2_mkDouble(floor(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp DoubleCeiling [x]       = "idris2_mkDouble(ceil(idris2_vp_to_Double(" ++ x ++ ")))"
-rustOp (Add ty)      [x, y]    = "idris2_add_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (Sub ty)      [x, y]    = "idris2_sub_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (Mul ty)      [x, y]    = "idris2_mul_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (Div ty)      [x, y]    = "idris2_div_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (Mod ty)      [x, y]    = "idris2_mod_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (ShiftL ty)   [x, y]    = "idris2_shiftl_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (ShiftR ty)   [x, y]    = "idris2_shiftr_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (BAnd ty)     [x, y]    = "idris2_and_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (BOr ty)      [x, y]    = "idris2_or_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (BXOr ty)     [x, y]    = "idris2_xor_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (LT ty)       [x, y]    = "idris2_lt_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (GT ty)       [x, y]    = "idris2_gt_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (EQ ty)       [x, y]    = "idris2_eq_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (LTE ty)      [x, y]    = "idris2_lte_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp (GTE ty)      [x, y]    = "idris2_gte_" ++ cPrimType ty ++ "(" ++ x ++ ", " ++ y ++ ")"
-rustOp StrIndex      [x, i]    = "strIndex(" ++ x ++ ", " ++ i ++ ")"
-rustOp StrCons       [x, y]    = "strCons(" ++ x ++ ", " ++ y ++ ")"
-rustOp StrAppend     [x, y]    = "strAppend(" ++ x ++ ", " ++ y ++ ")"
-rustOp StrSubstr     [x, y, z] = "strSubstr(" ++ x ++ ", " ++ y  ++ ", " ++ z ++ ")"
-rustOp BelieveMe     [_, _, x] = "idris2_newReference(" ++ x ++ ")"
-rustOp Crash         [_, msg]  = "idris2_crash(" ++ msg ++ ");"
-rustOp fn args = show fn ++ "(" ++ (showSep ", " $ toList args) ++ ")"
+rustOp (Neg ty)      [x]       = "idris2_negate_"  ++  cPrimType ty ++ "(vec![" ++ x ++ "])"
+rustOp StrLength     [x]       = "stringLength(vec![" ++ x ++ "])"
+rustOp StrHead       [x]       = "head(vec![" ++ x ++ "])"
+rustOp StrTail       [x]       = "tail(vec![" ++ x ++ "])"
+rustOp StrReverse    [x]       = "reverse(vec![" ++ x ++ "])"
+rustOp (Cast i o)    [x]       = "idris2_cast_" ++ (cPrimType i) ++ "_to_" ++ (cPrimType o) ++ "(vec![" ++ x ++ "])"
+rustOp DoubleExp     [x]       = "idris2_mkDouble(exp(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleLog     [x]       = "idris2_mkDouble(log(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoublePow     [x, y]    = "idris2_mkDouble(pow(idris2_vp_to_Double(vec![" ++ x ++ "]), idris2_vp_to_Double(vec![" ++ y ++ "])))"
+rustOp DoubleSin     [x]       = "idris2_mkDouble(sin(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleCos     [x]       = "idris2_mkDouble(cos(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleTan     [x]       = "idris2_mkDouble(tan(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleASin    [x]       = "idris2_mkDouble(asin(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleACos    [x]       = "idris2_mkDouble(acos(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleATan    [x]       = "idris2_mkDouble(atan(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleSqrt    [x]       = "idris2_mkDouble(sqrt(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleFloor   [x]       = "idris2_mkDouble(floor(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp DoubleCeiling [x]       = "idris2_mkDouble(ceil(idris2_vp_to_Double(vec![" ++ x ++ "])))"
+rustOp (Add ty)      [x, y]    = "idris2_add_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Sub ty)      [x, y]    = "idris2_sub_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Mul ty)      [x, y]    = "idris2_mul_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Div ty)      [x, y]    = "idris2_div_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Mod ty)      [x, y]    = "idris2_mod_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (ShiftL ty)   [x, y]    = "idris2_shiftl_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (ShiftR ty)   [x, y]    = "idris2_shiftr_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (BAnd ty)     [x, y]    = "idris2_and_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (BOr ty)      [x, y]    = "idris2_or_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (BXOr ty)     [x, y]    = "idris2_xor_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (LT ty)       [x, y]    = "idris2_lt_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (GT ty)       [x, y]    = "idris2_gt_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (EQ ty)       [x, y]    = "idris2_eq_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (LTE ty)      [x, y]    = "idris2_lte_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (GTE ty)      [x, y]    = "idris2_gte_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp StrIndex      [x, i]    = "strIndex(vec![" ++ x ++ ", " ++ i ++ "])"
+rustOp StrCons       [x, y]    = "strCons(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp StrAppend     [x, y]    = "strAppend(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp StrSubstr     [x, y, z] = "strSubstr(vec![" ++ x ++ ", " ++ y  ++ ", " ++ z ++ "])"
+rustOp BelieveMe     [_, _, x] = "idris2_newReference(vec![" ++ x ++ "])"
+rustOp Crash         [_, msg]  = "idris2_crash(vec![" ++ msg ++ "]);"
+rustOp fn args = show fn ++ "(vec![" ++ (showSep ", " $ toList args) ++ "])"
+-- rustOp _ args = "idris2_tmp(vec![\{showSep ", " $ toList args}])";
 
 rustStatementsFromANF : {auto a : Ref ArgCounter Nat} 
                       -> ANF 
                       -> Core String
-rustStatementsFromANF (AV fc x) = pure $ "val_" ++ show x
+rustStatementsFromANF (AV fc x) = pure $ "val_" ++ show x ++ ".clone()"
 rustStatementsFromANF (AAppName fc _ n args) = do
   let argsStr = String.Extra.join ", " $ 
-         map (\x => "&val_" ++ show x) args 
-  pure "\{rustName n}(\{argsStr})"
+         map (\x => "val_" ++ show x ++ ".clone()") args 
+  pure "\{rustName n}(vec![\{argsStr}])"
 
 rustStatementsFromANF (AUnderApp fc name missing args) = do
-  tmpArgs <- replicateC missing getTmpVarName
-  let tmpArgsStr = String.Extra.join ", " $
-         map ("&"++) tmpArgs
   let argsStr = String.Extra.join ", " $ 
-         (map (\x => "&val_" ++ show x) args) ++ tmpArgs
-  pure "|\{tmpArgsStr}| \{rustName name}(\{argsStr})"
-rustStatementsFromANF (AApp fc _ closure arg) = pure "app"
+         map (\x => "val_" ++ show x ++ ".clone()") args
+  pure "IdrisType::Function(\{show missing}, vec![\{argsStr}], Rc::new(\{rustName name}))"
+rustStatementsFromANF (AApp fc _ closure arg) = pure $ "idris2_apply_closure(\{"&val_" ++ show closure}, \{"&val_" ++ show arg})"
 rustStatementsFromANF (ALet fc var value body) = do 
   valueStr <- rustStatementsFromANF value
   let defStr = "let \{"val_v" ++ show var} = \{valueStr};"
@@ -236,7 +230,7 @@ rustStatementsFromANF (ACon fc name coninfo tag args) = do
     mapWithIndex (\ind, x => "\{"val_" ++ show x}.clone()") args 
   pure "IdrisType::Struct(\{maybe "-1" show tag}, vec![\{argsStr}])"
 rustStatementsFromANF (AOp fc _ op args) = do 
-  let argsStr = map (\x => "&val_" ++ show x) args 
+  let argsStr = map (\x => "val_" ++ show x ++ ".clone()") args 
   let ret = rustOp op argsStr
   pure ret
 rustStatementsFromANF (AExtPrim fc lazy n xs) = ?rustStatementsFromANF_rhs_7
@@ -244,60 +238,71 @@ rustStatementsFromANF (AConCase fc sc alts mDef) = do
   let sc' = "val_" ++ show sc
   tmpCastName <- getTmpVarName
   tmpRetName <- getTmpVarName
-  coreLift $ putStr $ "let \{tmpRetName} = "
+  coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.clone() {"
   _ <- foldlC (\els, (MkAConAlt name coninfo tag args body) => do
-      let erased = coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
-      if erased then coreLift $ putStrLn $ "\{els}if () == \{sc'} /* \{show name} \{show coninfo} ERASED */ {"
-          else coreLift $ putStrLn $ "\{els}if let Ok(\{tmpCastName}) = \{sc'}.downcast::<\{rustName name}>() /* \{show name} \{show coninfo} */ {"
+      -- let erased = coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
+      -- if erased then coreLift $ putStrLn $ "\{els}if () == \{sc'} /* \{show name} \{show coninfo} ERASED */ {"
+      --     else coreLift $ putStrLn $ "\{els}if let Ok(\{tmpCastName}) = \{sc'}.downcast::<\{rustName name}>() /* \{show name} \{show coninfo} */ {"
+
+      case tag of 
+           Nothing => coreLift $ putStrLn $ "Unexpected empyt tag"
+           Just tag' => coreLift $ putStrLn $ "IdrisType::Struct(\{show tag'}, args) => {"
 
       _ <- foldlC (\k, arg => do
-          coreLift $ putStrLn $ "let \{"&val_v" ++ show arg} = \{tmpCastName}.v\{show k};"
+          coreLift $ putStrLn $ "let \{"val_v" ++ show arg} = args.get(\{show k}).unwrap().clone();"
           pure (S k) ) 0 args
       
       b <- rustStatementsFromANF body
-      coreLift $ putStrLn $ b
+      coreLift $ putStrLn $ b 
+      coreLift $ putStrLn "}"
       pure "} else ") "" alts
   case mDef of
       Nothing => do
-          coreLift $ putStrLn $ "} else {\npanic!(\"Reached unreachable state\");"
+          coreLift $ putStrLn $ "_ => panic!(\"Reached unreachable state\")"
           pure ()
       Just body => do
-          coreLift $ putStrLn $ "} else (here) {"
+          coreLift $ putStrLn $ "_ => {"
+          b <- rustStatementsFromANF body
+          coreLift $ putStrLn $ b 
+          coreLift $ putStrLn $ "}"
           pure ()
   coreLift $ putStrLn $ "};"
   pure tmpRetName
-rustStatementsFromANF (AConstCase fc sc alts def) = do
+rustStatementsFromANF (AConstCase fc sc alts mDef) = do
   let sc' = "val_" ++ show sc
-  tmpCastName <- getTmpVarName
   tmpRetName <- getTmpVarName
+  coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.clone() {"
   case integer_switch alts of
       True => do
-          coreLift $ putStrLn $ "let \{tmpCastName} = \{sc'}.downcast_ref::<i64>().unwrap();"
-          coreLift $ putStr $ "let \{tmpRetName} = "
           _ <- foldlC (\els, (MkAConstAlt c body) => do
-              coreLift $ putStrLn $ "\{els}if *\{tmpCastName} == \{show c} {"
+              coreLift $ putStrLn $ "IdrisType::Int(\{show c}) => {"
               b <- rustStatementsFromANF body
               coreLift $ putStrLn $ b
+              coreLift $ putStrLn "}"
               pure "} else ") "" alts
           pure ()
 
       False => do
           _ <- foldlC (\els, (MkAConstAlt c body) => do
               case c of
-                  Str x => coreLift $ putStrLn $ "\{els}if (! strcmp(\{show x}, ((Value_String *)\{sc'})->str)) {"
-                  Db  x => coreLift $ putStrLn $ "\{els}if (((Value_Double *)\{sc'})->d == \{show x}) {"
+                  Str x => coreLift $ putStrLn $ "IdrisType::String(ref s) if s == \{show x} => {"
+                  Db  x => coreLift $ putStrLn $ "IdrisType::Double(\{show x}) => {"
                   x => throw $ InternalError "[refc] AConstCase : unsupported type. \{show fc} \{show x}"
+              b <- rustStatementsFromANF body
+              coreLift $ putStrLn $ b
+              coreLift $ putStrLn $ "}"
               pure "} else ") "" alts
           pure ()
-
-  case def of
+  case mDef of
       Nothing => do
-          coreLift $ putStrLn $ "} else {\npanic!(\"Reached unreachable state\");"
+          coreLift $ putStrLn $ "_ => panic!(\"Reached unreachable state\")"
           pure ()
       Just body => do
-          coreLift $ putStrLn $ "} else {"
+          coreLift $ putStrLn $ "_ => {"
           b <- rustStatementsFromANF body
-          coreLift $ putStrLn $ b
+          coreLift $ putStrLn $ b 
+          coreLift $ putStrLn $ "}"
+          pure ()
   coreLift $ putStrLn $ "};"
   pure tmpRetName
 
@@ -319,6 +324,15 @@ termToRustNames (TForce fc lz t) = ?termToRustNames_rhs_8
 termToRustNames (PrimVal fc c) = [show c]
 termToRustNames (Erased fc why) = ?termToRustNames_rhs_10
 termToRustNames (TType fc n) = [show n]
+
+footer : Core ()
+footer = do
+    coreLift $ putStrLn $ """
+        // main function
+        fn main() {
+          __mainExpression_0(vec![]);
+        }
+        """
 
 createRustFunctions : {auto c : Ref Ctxt Defs} 
                     -> {auto a : Ref ArgCounter Nat}
@@ -351,59 +365,31 @@ createRustFunctions (name, MkAFun args anf) = do
       -- pure ()
 
   -- coreLift $ putStrLn $ show $ gdef.type
-  let argsStr = String.Extra.join ", " $ 
-         map (\x => "val_v" ++ show x ++ ": &IdrisType") args 
-  let fn = "fn \{rustName name}(\{argsStr}) -> IdrisType {"
+  -- let argsStr = String.Extra.join ", " $ 
+  --        map (\x => "val_v" ++ show x ++ ": &IdrisType") args 
+  let fn = "fn \{rustName name}<'a>(args: Vec<IdrisType<'a>>) -> IdrisType<'a> {"
 
   coreLift $ putStrLn $ fn
+
+  let argsStrs = mapWithIndex (\ind, x => "let \{"val_v" ++ show x} = args.get(\{show ind}).unwrap().clone();") args
+
+  _ <- traverse (coreLift . putStrLn) argsStrs
   value <- rustStatementsFromANF anf
   coreLift $ putStrLn $ "return " ++ value ++ ";"
   coreLift $ putStrLn $ "}"
   pure ()
 createRustFunctions (name, MkACon tag arity nt) = do
-  defs <- get Ctxt
-  mty <- do Just gdef <- lookupCtxtExact name (gamma defs)
-              | Nothing => pure Nothing
-            let UN _ = dropNS name
-              | _ => pure Nothing
-            coreLift $ putStrLn $ show $ gdef.type
-            ty <- toFullNames gdef.type
-            pure (Just ty)
-  coreLift $ putStrLn $ show $ mty
-  coreLift $ putStrLn $ "struct \{rustName name} {"
-  _ <- traverse (\i => do
-            coreLift $ putStrLn $ "v\{show i}: &IdrisType,"
-            pure ()) $ rangeNat arity
-  coreLift $ putStrLn $ "}"
   pure ()
-createRustFunctions (n, MkAForeign ccs fargs x) = do
-  defs <- get Ctxt
-  Just gdef <- lookupCtxtExact n (gamma defs)
-    | Nothing => do
-      coreLift $ putStrLn $ rustName n 
-      pure ()
-  let UN _ = dropNS n
-    | _ => do
-      coreLift $ putStrLn $ "Name \{rustName n} not found in the context"
-      pure ()
-
-  pure ()
+createRustFunctions (n, MkAForeign ccs fargs ret) = do
   -- coreLift $ putStrLn $ "MkAForeign not implemented yet"
+  -- coreLift $ putStrLn $ show n
+  -- coreLift $ putStrLn $ show ccs
+  -- coreLift $ putStrLn $ show fargs
+  -- coreLift $ putStrLn $ show ret
   pure ()
-createRustFunctions (n, MkAError x) = do
-  defs <- get Ctxt
-  Just gdef <- lookupCtxtExact n (gamma defs)
-    | Nothing => do
-      coreLift $ putStrLn $ rustName n 
-      pure ()
-  let UN _ = dropNS n
-    | _ => do
-      coreLift $ putStrLn $ "Name \{rustName n} not found in the context"
-      pure ()
+createRustFunctions (n, MkAError exp) = throw $ InternalError "Error with expression: \{show exp}"
+-- not really total but this way this internal error does not contaminate everything else
 
-  pure ()
-  -- coreLift $ putStrLn $ "MkAError not implemented yet"
-  pure ()
 
 generateRustSourceFile : {auto ctxt : Ref Ctxt Defs}
                        -> {auto s : Ref Syn SyntaxInfo}

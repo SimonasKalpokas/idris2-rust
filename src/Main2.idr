@@ -30,6 +30,28 @@ getNextCounter = do
     put ArgCounter (S c)
     pure $ show c
 
+traverseC : (a -> Core b) -> Vect n a -> Core (Vect n b)
+traverseC g [] = pure []
+traverseC g (x::xs) = pure $ !(g x) :: !(traverseC g xs)
+
+integer_switch : List NamedConstAlt -> Bool
+integer_switch [] = True
+integer_switch (MkNConstAlt c _  :: _) =
+    case c of
+        (I x) => True
+        (I8 x) => True
+        (I16 x) => True
+        (I32 x) => True
+        (I64 x) => True
+        (B8 x) => True
+        (B16 x) => True
+        (B32 x) => True
+        (B64 x) => True
+        (BI x) => True
+        (Ch x) => True
+        _ => False
+
+
 mapWithIndex : (Nat -> a -> b) -> List a -> List b
 mapWithIndex f xs = go 0 xs
   where
@@ -100,21 +122,21 @@ rustName (WithBlock str i) = ?rustName_rhs_7
 rustName (Resolved i) = ?rustName_rhs_8
 
 rustConstant : Constant -> String
-rustConstant (I i) = show i
-rustConstant (I8 i) = show i
-rustConstant (I16 i) = show i
-rustConstant (I32 i) = show i
-rustConstant (I64 i) = show i
-rustConstant (BI i) = show i
-rustConstant (B8 m) = show m
-rustConstant (B16 m) = show m
-rustConstant (B32 m) = show m
-rustConstant (B64 m) = show m
-rustConstant (Str str) = show str
-rustConstant (Ch c) = show c
-rustConstant (Db dbl) = show dbl
-rustConstant (PrT pty) = show pty
-rustConstant WorldVal = "Ze Worldo"
+rustConstant (I i) = "IdrisType::Int(\{show i})"
+rustConstant (I8 i) = "IdrisType::Int(\{show i})"
+rustConstant (I16 i) = "IdrisType::Int(\{show i})"
+rustConstant (I32 i) = "IdrisType::Int(\{show i})"
+rustConstant (I64 i) = "IdrisType::Int(\{show i})"
+rustConstant (BI i) = "IdrisType::Int(\{show i})"
+rustConstant (B8 m) = "IdrisType::Int(\{show m})"
+rustConstant (B16 m) = "IdrisType::Int(\{show m})"
+rustConstant (B32 m) = "IdrisType::Int(\{show m})"
+rustConstant (B64 m) = "IdrisType::Int(\{show m})"
+rustConstant (Str str) = "IdrisType::String(\{show str}.to_string())"
+rustConstant (Ch c) = "IdrisType::Char(\{show c})"
+rustConstant (Db dbl) = "IdrisType::Double(\{show dbl})"
+rustConstant (PrT pty) = "TODO: resolve rustConstant PrT, got value: " ++ show pty
+rustConstant WorldVal = "TODO: resolve rustConstant WorldVal"
 
 varName : AVar -> String
 varName (ALocal i) = "var_" ++ (show i)
@@ -181,98 +203,103 @@ rustOp fn args = show fn ++ "(" ++ (showSep ", " $ toList args) ++ ")"
 rustStatementsFromNamedCExp : {auto a : Ref ArgCounter Nat} 
                       -> NamedCExp 
                       -> Core String
-rustStatementsFromNamedCExp (NmLocal _ n) = pure $ "NmLocal " ++ show n
-rustStatementsFromNamedCExp (NmRef _ n) = pure $ "NmRef " ++ show n
-rustStatementsFromNamedCExp (NmLam _ n body) = pure $ "NmLam " ++ show n ++ "\n  body: " ++ !(rustStatementsFromNamedCExp body)
-rustStatementsFromNamedCExp (NmLet _ n y z) = pure $ "NmLet " ++ show n ++ "\n  y: " ++ !(rustStatementsFromNamedCExp y) ++ "\n  z: " ++ !(rustStatementsFromNamedCExp z)
-rustStatementsFromNamedCExp (NmApp _ x xs) = pure $ "NmApp " ++ !(rustStatementsFromNamedCExp x) ++ "\n  args: " ++ 
-                                             (String.Extra.join ",\n" !(traverse rustStatementsFromNamedCExp xs))
-rustStatementsFromNamedCExp (NmCon _ n x tag xs) = pure $ "NmCon " ++ show n
-rustStatementsFromNamedCExp (NmOp _ f xs) = pure $ "NmOp " ++ show f
+rustStatementsFromNamedCExp (NmLocal _ name) = pure $ rustName name
+rustStatementsFromNamedCExp (NmRef _ name) = pure $ rustName name
+rustStatementsFromNamedCExp (NmLam _ name body) = do
+  pure $ "NmLam " ++ rustName name ++ "\n  body: " ++ !(rustStatementsFromNamedCExp body)
+rustStatementsFromNamedCExp (NmLet _ name value body) = do
+  valueStr <- rustStatementsFromNamedCExp value
+  let defStr = "let \{rustName name} = \{valueStr}"
+  coreLift $ putStrLn $ defStr
+  rustStatementsFromNamedCExp body
+rustStatementsFromNamedCExp (NmApp _ value args) = do
+  valueStr <- rustStatementsFromNamedCExp value
+  let argsStr = String.Extra.join ", " !(traverse rustStatementsFromNamedCExp args)
+  let callStr = "\{valueStr}(\{argsStr})"
+  pure $ callStr
+rustStatementsFromNamedCExp (NmCon _ name coninfo tag args) = do
+  argsStr <- String.Extra.join ", " <$> traverse (\x => pure $ "\{!(rustStatementsFromNamedCExp x)}") args 
+  pure "IdrisType::Struct(\{maybe "-1" show tag}, vec![\{argsStr}])"
+rustStatementsFromNamedCExp (NmOp _ f args) = pure $ rustOp f !(traverseC rustStatementsFromNamedCExp args)
 rustStatementsFromNamedCExp (NmExtPrim _ p xs) = pure $ "NmExtPrim " ++ show p
 rustStatementsFromNamedCExp (NmForce _ lz x) = ?rustStatementsFromNamedCExp_rhs_8
 rustStatementsFromNamedCExp (NmDelay _ lz x) = ?rustStatementsFromNamedCExp_rhs_9
-rustStatementsFromNamedCExp (NmConCase _ sc xs x) = ?rustStatementsFromNamedCExp_rhs_10
-rustStatementsFromNamedCExp (NmConstCase _ sc xs x) = ?rustStatementsFromNamedCExp_rhs_11
-rustStatementsFromNamedCExp (NmPrimVal _ cst) = ?rustStatementsFromNamedCExp_rhs_12
+rustStatementsFromNamedCExp (NmConCase _ sc alts mDef) = do
+  sc' <- rustStatementsFromNamedCExp sc
+  tmpCastName <- getTmpVarName
+  tmpRetName <- getTmpVarName
+  coreLift $ putStr $ "let \{tmpRetName} = "
+  _ <- foldlC (\els, (MkNConAlt name coninfo tag args body) => do
+      let erased = coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
+      if erased then coreLift $ putStrLn $ "\{els}if () == \{sc'} /* \{show name} \{show coninfo} ERASED */ {"
+          else coreLift $ putStrLn $ "\{els}if let Ok(\{tmpCastName}) = \{sc'}.downcast::<\{rustName name}>() /* \{show name} \{show coninfo} */ {"
+
+      _ <- foldlC (\k, arg => do
+          coreLift $ putStrLn $ "let \{rustName arg} = \{tmpCastName}.v\{show k};"
+          pure (S k) ) 0 args
+      
+      b <- rustStatementsFromNamedCExp body
+      coreLift $ putStrLn $ b
+      pure "} else ") "" alts
+  case mDef of
+      Nothing => do
+          coreLift $ putStrLn $ "} else {\npanic!(\"Reached unreachable state\");"
+          pure ()
+      Just body => do
+          coreLift $ putStrLn $ "} else (here) {"
+          pure ()
+  coreLift $ putStrLn $ "};"
+  pure tmpRetName
+rustStatementsFromNamedCExp (NmConstCase fc sc alts def) = do
+  sc' <- rustStatementsFromNamedCExp sc
+  tmpCastName <- getTmpVarName
+  tmpRetName <- getTmpVarName
+  case integer_switch alts of
+      True => do
+          coreLift $ putStrLn $ "let \{tmpCastName} = \{sc'}.downcast_ref::<i64>().unwrap();"
+          coreLift $ putStr $ "let \{tmpRetName} = "
+          _ <- foldlC (\els, (MkNConstAlt c body) => do
+              coreLift $ putStrLn $ "\{els}if *\{tmpCastName} == \{show c} {"
+              b <- rustStatementsFromNamedCExp body
+              coreLift $ putStrLn $ b
+              pure "} else ") "" alts
+          pure ()
+      False => do
+          _ <- foldlC (\els, (MkNConstAlt c body) => do
+              case c of
+                  Str x => coreLift $ putStrLn $ "\{els}if (! strcmp(\{show x}, ((Value_String *)\{sc'})->str)) {"
+                  Db  x => coreLift $ putStrLn $ "\{els}if (((Value_Double *)\{sc'})->d == \{show x}) {"
+                  x => throw $ InternalError "[refc] AConstCase : unsupported type. \{show fc} \{show x}"
+              pure "} else ") "" alts
+          pure ()
+  case def of
+      Nothing => do
+          coreLift $ putStrLn $ "} else {\npanic!(\"Reached unreachable state\");"
+          pure ()
+      Just body => do
+          coreLift $ putStrLn $ "} else {"
+          b <- rustStatementsFromNamedCExp body
+          coreLift $ putStrLn $ b
+  coreLift $ putStrLn $ "};"
+  pure tmpRetName
+rustStatementsFromNamedCExp (NmPrimVal _ cst) = pure $ "\{rustConstant cst}"
 rustStatementsFromNamedCExp (NmErased _) = ?rustStatementsFromNamedCExp_rhs_13
 rustStatementsFromNamedCExp (NmCrash _ str) = ?rustStatementsFromNamedCExp_rhs_14
 
-
-rustStatementsFromANF : {auto a : Ref ArgCounter Nat} 
-                      -> ANF 
-                      -> Core String
-rustStatementsFromANF (AV fc x) = ?rustStatementsFromANF_rhs_0
-rustStatementsFromANF (AAppName fc _ n args) = do
-  let argsStr = String.Extra.join ", " $ 
-         map (\x => "val_" ++ show x) args 
-  pure "\{rustName n}(\{argsStr})"
-
-rustStatementsFromANF (AUnderApp fc name missing args) = pure "underapp"
-rustStatementsFromANF (AApp fc _ closure arg) = pure "app"
-rustStatementsFromANF (ALet fc var value body) = do 
-  valueStr <- rustStatementsFromANF value
-  let defStr = "let \{"val_v" ++ show var} = \{valueStr};"
-  coreLift $ putStrLn $ defStr
-  rustStatementsFromANF body
-rustStatementsFromANF (ACon fc name coninfo tag args) = do
-        if coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
-            then pure "Box::new(()) as Box<dyn Any> /* \{show name} \{show coninfo} */"
-            else do
-                let argsStr = String.Extra.join ",\n" $ 
-                    mapWithIndex (\ind, x => "v\{show ind}: *\{"val_" ++ show x}.downcast().unwrap()") args 
-                pure "Box::new(\{rustName name} {\n\{argsStr},\n})"
-rustStatementsFromANF (AOp fc _ op args) = do 
-  let argsStr = map (\x => "val_" ++ show x) args 
-  let ret = rustOp op argsStr
-  pure ret
-rustStatementsFromANF (AExtPrim fc lazy n xs) = ?rustStatementsFromANF_rhs_7
-rustStatementsFromANF (AConCase fc sc alts mDef) = do
-  let sc' = varName sc
-  tmpVarName <- getTmpVarName
-  _ <- foldlC (\els, (MkAConAlt name coninfo tag args body) => do
-      let erased = coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
-      if erased then coreLift $ putStrLn $ "\{els}if (NULL == \{sc'} /* \{show name} \{show coninfo} ERASED */) {"
-          else if coninfo == CONS || coninfo == JUST || coninfo == SUCC
-          then coreLift $ putStrLn $ "\{els}if (NULL != \{sc'} /* \{show name} \{show coninfo} */) {"
-          else do
-              case tag of
-                  Nothing   => coreLift $ putStrLn $ "\{els}if (! strcmp(((Value_Constructor *)\{sc'})->name, idris2_constr_\{rustName name})) {"
-                  Just tag' => coreLift $ putStrLn $ "\{els}if (((Value_Constructor *)\{sc'})->tag == \{show tag'} /* \{show name} */) {"
-
-      _ <- foldlC (\k, arg => do
-          coreLift $ putStrLn $ "Value *var_\{show arg} = ((Value_Constructor*)\{sc'})->args[\{show k}];"
-          pure (S k) ) 0 args
-      pure "} else ") "" alts
-  case mDef of
-      Nothing => pure ()
-      Just body => do
-          coreLift $ putStrLn $ "} else {"
-          pure ()
-  pure sc'
-rustStatementsFromANF (AConstCase fc sc alts def) = do
-  let sc' = varName sc
-
-  pure sc'
-
-rustStatementsFromANF (APrimVal fc cst) = pure $ "Box::new(\{rustConstant cst}) as Box<dyn Any>"
-rustStatementsFromANF (AErased fc) = ?rustStatementsFromANF_rhs_11
-rustStatementsFromANF (ACrash fc str) = ?rustStatementsFromANF_rhs_12
-
 termToRustNames : {vars: _} -> Term vars -> List String
-termToRustNames (Local fc isLet idx p) = [show $ nameAt p]
-termToRustNames (Ref fc nt name) = [show name]
+termToRustNames (Local fc isLet idx p) = ["local", show $ nameAt p]
+termToRustNames (Ref fc nt name) = ["ref", show name]
 termToRustNames (Meta fc n i ts) = ?termToRustNames_rhs_2
-termToRustNames (Bind _ name (Pi _ _ _ ty) scope) = (termToRustNames ty) ++ (termToRustNames scope)
+termToRustNames (Bind _ name (Pi _ rigCount info ty) scope) = ["bind", rustName name, show rigCount, show info] ++ (termToRustNames ty) ++ ["scope:"] ++ (termToRustNames scope)
 termToRustNames (Bind _ name _ scope) = ?termToRustNames_rhs_3
-termToRustNames (App _ fn arg) = [show fn, show arg]
+termToRustNames (App _ fn arg) = ["&'a IdrisType"]
 termToRustNames (As fc side as pat) = ?termToRustNames_rhs_5
 termToRustNames (TDelayed fc lz t) = ?termToRustNames_rhs_6
 termToRustNames (TDelay fc lz ty arg) = ?termToRustNames_rhs_7
 termToRustNames (TForce fc lz t) = ?termToRustNames_rhs_8
-termToRustNames (PrimVal fc c) = [show c]
+termToRustNames (PrimVal fc c) = ["primVal", show c]
 termToRustNames (Erased fc why) = ?termToRustNames_rhs_10
-termToRustNames (TType fc n) = [show n]
+termToRustNames (TType fc n) = ["ttype", show n]
 
 createRustFunctions : {auto c : Ref Ctxt Defs} 
                     -> {auto a : Ref ArgCounter Nat}
@@ -280,11 +307,11 @@ createRustFunctions : {auto c : Ref Ctxt Defs}
                     -> (Name, (FC, NamedDef))
                     -> Core ()
 createRustFunctions (name, _, MkNmFun args body) = do 
-  -- defs <- get Ctxt
-  -- Just globalDef <- lookupCtxtExact name (gamma defs)
-  --   | Nothing => do
-  --     coreLift $ putStrLn $ "Name \{rustName name} not found in the context"
-  --     pure ()
+  defs <- get Ctxt
+  Just globalDef <- lookupCtxtExact name (gamma defs)
+    | Nothing => do
+      coreLift $ putStrLn $ "Name \{rustName name} not found in the context"
+      pure ()
   -- type <- normaliseHoles defs [] globalDef.type
   -- type <- toFullNames type
   -- let names = termToRustNames type
@@ -294,20 +321,17 @@ createRustFunctions (name, _, MkNmFun args body) = do
   -- coreLift $ putStrLn $ show type
   -- coreLift $ putStrLn $ show names
 
-  -- mty <- do Just gdef <- lookupCtxtExact n (gamma defs)
-  --             | Nothing => pure Nothing
-  --           let UN _ = dropNS n
-  --             | _ => pure Nothing
-  --           coreLift $ putStrLn $ show $ gdef.type
-  --           ty <- toFullNames gdef.type
-  --           pure (Just ty)
-      -- coreLift $ putStrLn $ rustName n 
-      -- pure ()
+  ty <- toFullNames globalDef.type
+  coreLift $ putStrLn $ show $ ty
+  coreLift $ putStrLn $ show $ termToRustNames ty
+  ty <- (resugar [] ty)
+  coreLift $ putStrLn $ show $ ty
+  -- ty <- toFullNames gdef.type
 
   -- coreLift $ putStrLn $ show $ gdef.type
   let argsStr = String.Extra.join ", " $ 
-         map (\x => "val_v" ++ show x ++ ": Box<dyn Any>") args 
-  let fn = "fn \{rustName name}(\{argsStr}) -> Box<dyn Any> {"
+         map (\x => rustName x ++ ": &IdrisType") args 
+  let fn = "fn \{rustName name}(\{argsStr}) -> IdrisType {"
 
   coreLift $ putStrLn $ fn
   -- let argsVars = SortedSet.fromList $ ALocal <$> args
