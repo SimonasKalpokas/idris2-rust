@@ -1,5 +1,5 @@
-build: src/Main.idr
-	../Idris2/bootstrap-build/bin/idris2 --inc chez --build idris2-rust.ipkg
+# Idris 2 executable
+export IDRIS2 ?= idris2
 
-hello: hello.idr src/Main.idr
-	./build/exec/idris2-rust hello.idr -o hello
+build: src/Main.idr
+	IDRIS2 --inc chez --build idris2-rust.ipkg

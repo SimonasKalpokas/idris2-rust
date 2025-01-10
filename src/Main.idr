@@ -11,9 +11,6 @@ import Core.Value
 
 import Compiler.Common
 import Compiler.ANF
-import Compiler.LambdaLift
-import Compiler.CompileExpr
-import Compiler.VMCode
 import Libraries.Data.String.Extra
 import Libraries.Data.SortedSet
 import Libraries.Data.NameMap
@@ -68,48 +65,48 @@ mapWithIndex f xs = go 0 xs
     go _ [] = []
     go i (x :: xs) = f i x :: go (i + 1) xs
 
-showcCleanStringChar : Char -> String -> String
-showcCleanStringChar ' ' = ("_" ++)
-showcCleanStringChar '!' = ("_bang" ++)
-showcCleanStringChar '"' = ("_quotation" ++)
-showcCleanStringChar '#' = ("_number" ++)
-showcCleanStringChar '$' = ("_dollar" ++)
-showcCleanStringChar '%' = ("_percent" ++)
-showcCleanStringChar '&' = ("_and" ++)
-showcCleanStringChar '\'' = ("_tick" ++)
-showcCleanStringChar '(' = ("_parenOpen" ++)
-showcCleanStringChar ')' = ("_parenClose" ++)
-showcCleanStringChar '*' = ("_star" ++)
-showcCleanStringChar '+' = ("_plus" ++)
-showcCleanStringChar ',' = ("_comma" ++)
-showcCleanStringChar '-' = ("__" ++)
-showcCleanStringChar '.' = ("_dot" ++)
-showcCleanStringChar '/' = ("_slash" ++)
-showcCleanStringChar ':' = ("_colon" ++)
-showcCleanStringChar ';' = ("_semicolon" ++)
-showcCleanStringChar '<' = ("_lt" ++)
-showcCleanStringChar '=' = ("_eq" ++)
-showcCleanStringChar '>' = ("_gt" ++)
-showcCleanStringChar '?' = ("_question" ++)
-showcCleanStringChar '@' = ("_at" ++)
-showcCleanStringChar '[' = ("_bracketOpen" ++)
-showcCleanStringChar '\\' = ("_backslash" ++)
-showcCleanStringChar ']' = ("_bracketClose" ++)
-showcCleanStringChar '^' = ("_hat" ++)
-showcCleanStringChar '_' = ("_" ++)
-showcCleanStringChar '`' = ("_backquote" ++)
-showcCleanStringChar '{' = ("_braceOpen" ++)
-showcCleanStringChar '|' = ("_or" ++)
-showcCleanStringChar '}' = ("_braceClose" ++)
-showcCleanStringChar '~' = ("_tilde" ++)
-showcCleanStringChar c = strCons c
+showRustCleanStringChar : Char -> String -> String
+showRustCleanStringChar ' ' = ("_" ++)
+showRustCleanStringChar '!' = ("_bang" ++)
+showRustCleanStringChar '"' = ("_quotation" ++)
+showRustCleanStringChar '#' = ("_number" ++)
+showRustCleanStringChar '$' = ("_dollar" ++)
+showRustCleanStringChar '%' = ("_percent" ++)
+showRustCleanStringChar '&' = ("_and" ++)
+showRustCleanStringChar '\'' = ("_tick" ++)
+showRustCleanStringChar '(' = ("_parenOpen" ++)
+showRustCleanStringChar ')' = ("_parenClose" ++)
+showRustCleanStringChar '*' = ("_star" ++)
+showRustCleanStringChar '+' = ("_plus" ++)
+showRustCleanStringChar ',' = ("_comma" ++)
+showRustCleanStringChar '-' = ("__" ++)
+showRustCleanStringChar '.' = ("_dot" ++)
+showRustCleanStringChar '/' = ("_slash" ++)
+showRustCleanStringChar ':' = ("_colon" ++)
+showRustCleanStringChar ';' = ("_semicolon" ++)
+showRustCleanStringChar '<' = ("_lt" ++)
+showRustCleanStringChar '=' = ("_eq" ++)
+showRustCleanStringChar '>' = ("_gt" ++)
+showRustCleanStringChar '?' = ("_question" ++)
+showRustCleanStringChar '@' = ("_at" ++)
+showRustCleanStringChar '[' = ("_bracketOpen" ++)
+showRustCleanStringChar '\\' = ("_backslash" ++)
+showRustCleanStringChar ']' = ("_bracketClose" ++)
+showRustCleanStringChar '^' = ("_hat" ++)
+showRustCleanStringChar '_' = ("_" ++)
+showRustCleanStringChar '`' = ("_backquote" ++)
+showRustCleanStringChar '{' = ("_braceOpen" ++)
+showRustCleanStringChar '|' = ("_or" ++)
+showRustCleanStringChar '}' = ("_braceClose" ++)
+showRustCleanStringChar '~' = ("_tilde" ++)
+showRustCleanStringChar c = strCons c
 
-showcCleanString : List Char -> String -> String
-showcCleanString [] = id
-showcCleanString (c ::cs) = (showcCleanStringChar c) . showcCleanString cs
+showRustCleanString : List Char -> String -> String
+showRustCleanString [] = id
+showRustCleanString (c ::cs) = (showRustCleanStringChar c) . showRustCleanString cs
 
-cCleanString : String -> String
-cCleanString cs = showcCleanString (unpack cs) ""
+rustCleanString : String -> String
+rustCleanString cs = showRustCleanString (unpack cs) ""
 
 getTmpVarName : {auto a : Ref ArgCounter Nat} -> Core String
 getTmpVarName = pure $ "tmp_" ++ !(getNextCounter)
@@ -120,15 +117,34 @@ rustUserName (Field str) = "." ++ str
 rustUserName Underscore = "_"
 
 rustName : Name -> String
-rustName (NS ns n) = cCleanString (showNSWithSep "_" ns) ++ "_" ++ rustName n
-rustName (UN n) = cCleanString $ rustUserName n
-rustName (MN str i) = cCleanString str ++ "_" ++ (cCleanString $ show i)
+rustName (NS ns n) = rustCleanString (showNSWithSep "_" ns) ++ "_" ++ rustName n
+rustName (UN n) = rustCleanString $ rustUserName n
+rustName (MN str i) = rustCleanString str ++ "_" ++ (rustCleanString $ show i)
 rustName (PV n i) = "pat__" ++ rustName n
 rustName (DN str n) = rustName n
-rustName (Nested x n) = ?rustName_rhs_5
-rustName (CaseBlock str i) = ?rustName_rhs_6
-rustName (WithBlock str i) = ?rustName_rhs_7
-rustName (Resolved i) = ?rustName_rhs_8
+rustName (Nested i n) = "n__" ++ rustCleanString (show i) ++ "_" ++ rustName n
+rustName (CaseBlock x y) = "case__" ++ rustCleanString (show x) ++ "_" ++ rustCleanString (show y)
+rustName (WithBlock x y) = "with__" ++ rustCleanString (show x) ++ "_" ++ rustCleanString (show y)
+rustName (Resolved i) = "fn__" ++ rustCleanString (show i)
+
+rustType : PrimType -> String
+rustType IntType = "Int"
+rustType Int8Type = "Int"
+rustType Int16Type = "Int"
+rustType Int32Type = "Int"
+rustType Int64Type = "Int"
+rustType IntegerType = "Int"
+rustType Bits8Type = "Int"
+rustType Bits16Type = "Int"
+rustType Bits32Type = "Int"
+rustType Bits64Type = "Int"
+rustType StringType = "String"
+rustType CharType = "Char"
+rustType DoubleType = "Double"
+rustType WorldType = "World"
+
+rustPrimType : PrimType -> String
+rustPrimType t = "IdrisMetaType::\{rustType t}"
 
 rustConstant : Constant -> String
 rustConstant (I i) = "IdrisType::Int(\{show i})"
@@ -144,67 +160,50 @@ rustConstant (B64 m) = "IdrisType::Int(\{show m})"
 rustConstant (Str str) = "IdrisType::String(\{show str}.to_string())"
 rustConstant (Ch c) = "IdrisType::Char(\{show c})"
 rustConstant (Db dbl) = "IdrisType::Double(\{show dbl})"
-rustConstant (PrT pty) = "todo!(\"resolve rustConstant PrT, got value: " ++ show pty ++ "\")"
+rustConstant (PrT pty) = rustPrimType pty
 rustConstant WorldVal = "IdrisType::World"
 
-cPrimType : PrimType -> String
-cPrimType IntType = "Int64"
-cPrimType Int8Type = "Int8"
-cPrimType Int16Type = "Int16"
-cPrimType Int32Type = "Int32"
-cPrimType Int64Type = "Int64"
-cPrimType IntegerType = "Integer"
-cPrimType Bits8Type = "Bits8"
-cPrimType Bits16Type = "Bits16"
-cPrimType Bits32Type = "Bits32"
-cPrimType Bits64Type = "Bits64"
-cPrimType StringType = "string"
-cPrimType CharType = "Char"
-cPrimType DoubleType = "Double"
-cPrimType WorldType = "void"
-
 rustOp : {0 arity : Nat} -> PrimFn arity -> Vect arity String -> String
-rustOp (Neg ty)      [x]       = "idris2_negate_"  ++  cPrimType ty ++ "(vec![" ++ x ++ "])"
+rustOp (Neg ty)      [x]       = "idris2_negate_"  ++  rustType ty ++ "(vec![" ++ x ++ "])"
 rustOp StrLength     [x]       = "stringLength(vec![" ++ x ++ "])"
 rustOp StrHead       [x]       = "head(vec![" ++ x ++ "])"
 rustOp StrTail       [x]       = "tail(vec![" ++ x ++ "])"
 rustOp StrReverse    [x]       = "reverse(vec![" ++ x ++ "])"
-rustOp (Cast i o)    [x]       = "idris2_cast_" ++ (cPrimType i) ++ "_to_" ++ (cPrimType o) ++ "(vec![" ++ x ++ "])"
-rustOp DoubleExp     [x]       = "idris2_mkDouble(exp(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleLog     [x]       = "idris2_mkDouble(log(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoublePow     [x, y]    = "idris2_mkDouble(pow(idris2_vp_to_Double(vec![" ++ x ++ "]), idris2_vp_to_Double(vec![" ++ y ++ "])))"
-rustOp DoubleSin     [x]       = "idris2_mkDouble(sin(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleCos     [x]       = "idris2_mkDouble(cos(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleTan     [x]       = "idris2_mkDouble(tan(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleASin    [x]       = "idris2_mkDouble(asin(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleACos    [x]       = "idris2_mkDouble(acos(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleATan    [x]       = "idris2_mkDouble(atan(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleSqrt    [x]       = "idris2_mkDouble(sqrt(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleFloor   [x]       = "idris2_mkDouble(floor(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp DoubleCeiling [x]       = "idris2_mkDouble(ceil(idris2_vp_to_Double(vec![" ++ x ++ "])))"
-rustOp (Add ty)      [x, y]    = "idris2_add_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (Sub ty)      [x, y]    = "idris2_sub_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (Mul ty)      [x, y]    = "idris2_mul_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (Div ty)      [x, y]    = "idris2_div_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (Mod ty)      [x, y]    = "idris2_mod_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (ShiftL ty)   [x, y]    = "idris2_shiftl_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (ShiftR ty)   [x, y]    = "idris2_shiftr_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (BAnd ty)     [x, y]    = "idris2_and_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (BOr ty)      [x, y]    = "idris2_or_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (BXOr ty)     [x, y]    = "idris2_xor_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (LT ty)       [x, y]    = "idris2_lt_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (GT ty)       [x, y]    = "idris2_gt_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (EQ ty)       [x, y]    = "idris2_eq_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (LTE ty)      [x, y]    = "idris2_lte_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
-rustOp (GTE ty)      [x, y]    = "idris2_gte_" ++ cPrimType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Cast i o)    [x]       = "idris2_cast_" ++ (rustType i) ++ "_to_" ++ (rustType o) ++ "(vec![" ++ x ++ "])"
+rustOp DoubleExp     [x]       = "exp(vec![" ++ x ++ "])"
+rustOp DoubleLog     [x]       = "log(vec![" ++ x ++ "])"
+rustOp DoublePow     [x, y]    = "pow(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp DoubleSin     [x]       = "sin(vec![" ++ x ++ "])"
+rustOp DoubleCos     [x]       = "cos(vec![" ++ x ++ "])"
+rustOp DoubleTan     [x]       = "tan(vec![" ++ x ++ "])"
+rustOp DoubleASin    [x]       = "asin(vec![" ++ x ++ "])"
+rustOp DoubleACos    [x]       = "acos(vec![" ++ x ++ "])"
+rustOp DoubleATan    [x]       = "atan(vec![" ++ x ++ "])"
+rustOp DoubleSqrt    [x]       = "sqrt(vec![" ++ x ++ "])"
+rustOp DoubleFloor   [x]       = "floor(vec![" ++ x ++ "])"
+rustOp DoubleCeiling [x]       = "ceil(vec![" ++ x ++ "])"
+rustOp (Add ty)      [x, y]    = "idris2_add_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Sub ty)      [x, y]    = "idris2_sub_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Mul ty)      [x, y]    = "idris2_mul_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Div ty)      [x, y]    = "idris2_div_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (Mod ty)      [x, y]    = "idris2_mod_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (ShiftL ty)   [x, y]    = "idris2_shiftl_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (ShiftR ty)   [x, y]    = "idris2_shiftr_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (BAnd ty)     [x, y]    = "idris2_and_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (BOr ty)      [x, y]    = "idris2_or_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (BXOr ty)     [x, y]    = "idris2_xor_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (LT ty)       [x, y]    = "idris2_lt_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (GT ty)       [x, y]    = "idris2_gt_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (EQ ty)       [x, y]    = "idris2_eq_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (LTE ty)      [x, y]    = "idris2_lte_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
+rustOp (GTE ty)      [x, y]    = "idris2_gte_" ++ rustType ty ++ "(vec![" ++ x ++ ", " ++ y ++ "])"
 rustOp StrIndex      [x, i]    = "strIndex(vec![" ++ x ++ ", " ++ i ++ "])"
 rustOp StrCons       [x, y]    = "strCons(vec![" ++ x ++ ", " ++ y ++ "])"
 rustOp StrAppend     [x, y]    = "strAppend(vec![" ++ x ++ ", " ++ y ++ "])"
 rustOp StrSubstr     [x, y, z] = "strSubstr(vec![" ++ x ++ ", " ++ y  ++ ", " ++ z ++ "])"
-rustOp BelieveMe     [_, _, x] = "idris2_newReference(vec![" ++ x ++ "])"
+rustOp BelieveMe     [_, _, x] = x
 rustOp Crash         [_, msg]  = "idris2_crash(vec![" ++ msg ++ "]);"
 rustOp fn args = show fn ++ "(vec![" ++ (showSep ", " $ toList args) ++ "])"
--- rustOp _ args = "idris2_tmp(vec![\{showSep ", " $ toList args}])";
 
 rustStatementsFromANF : {auto a : Ref ArgCounter Nat} 
                       -> ANF 
@@ -218,7 +217,7 @@ rustStatementsFromANF (AAppName fc _ n args) = do
 rustStatementsFromANF (AUnderApp fc name missing args) = do
   let argsStr = String.Extra.join ", " $ 
          map (\x => "val_" ++ show x ++ ".clone()") args
-  pure "IdrisType::Function(\{show missing}, vec![\{argsStr}], Rc::new(\{rustName name}))"
+  pure "IdrisType::Function(\{show missing}, vec![\{argsStr}], \{rustName name})"
 rustStatementsFromANF (AApp fc _ closure arg) = pure $ "idris2_apply_closure(\{"&val_" ++ show closure}, \{"&val_" ++ show arg})"
 rustStatementsFromANF (ALet fc var value body) = do 
   valueStr <- rustStatementsFromANF value
@@ -236,14 +235,9 @@ rustStatementsFromANF (AOp fc _ op args) = do
 rustStatementsFromANF (AExtPrim fc lazy n xs) = ?rustStatementsFromANF_rhs_7
 rustStatementsFromANF (AConCase fc sc alts mDef) = do
   let sc' = "val_" ++ show sc
-  tmpCastName <- getTmpVarName
   tmpRetName <- getTmpVarName
   coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.clone() {"
   _ <- foldlC (\els, (MkAConAlt name coninfo tag args body) => do
-      -- let erased = coninfo == NIL || coninfo == NOTHING || coninfo == ZERO || coninfo == UNIT
-      -- if erased then coreLift $ putStrLn $ "\{els}if () == \{sc'} /* \{show name} \{show coninfo} ERASED */ {"
-      --     else coreLift $ putStrLn $ "\{els}if let Ok(\{tmpCastName}) = \{sc'}.downcast::<\{rustName name}>() /* \{show name} \{show coninfo} */ {"
-
       case tag of 
            Nothing => coreLift $ putStrLn $ "Unexpected empyt tag"
            Just tag' => coreLift $ putStrLn $ "IdrisType::Struct(\{show tag'}, args) => {"
@@ -307,7 +301,7 @@ rustStatementsFromANF (AConstCase fc sc alts mDef) = do
   pure tmpRetName
 
 rustStatementsFromANF (APrimVal fc cst) = pure $ "\{rustConstant cst}"
-rustStatementsFromANF (AErased fc) = ?rustStatementsFromANF_rhs_11
+rustStatementsFromANF (AErased fc) = pure "IdrisType::None"
 rustStatementsFromANF (ACrash fc str) = ?rustStatementsFromANF_rhs_12
 
 termToRustNames : {vars: _} -> Term vars -> List String
@@ -349,34 +343,7 @@ createRustFunctions : {auto c : Ref Ctxt Defs}
                     -> (Name, ANFDef)
                     -> Core ()
 createRustFunctions (name, MkAFun args anf) = do 
-  -- defs <- get Ctxt
-  -- Just globalDef <- lookupCtxtExact name (gamma defs)
-  --   | Nothing => do
-  --     coreLift $ putStrLn $ "Name \{rustName name} not found in the context"
-  --     pure ()
-  -- type <- normaliseHoles defs [] globalDef.type
-  -- type <- toFullNames type
-  -- let names = termToRustNames type
-  --
-  -- coreLift $ putStrLn $ rustName name 
-  -- coreLift $ putStrLn $ show names
-  -- coreLift $ putStrLn $ show type
-  -- coreLift $ putStrLn $ show names
-
-  -- mty <- do Just gdef <- lookupCtxtExact n (gamma defs)
-  --             | Nothing => pure Nothing
-  --           let UN _ = dropNS n
-  --             | _ => pure Nothing
-  --           coreLift $ putStrLn $ show $ gdef.type
-  --           ty <- toFullNames gdef.type
-  --           pure (Just ty)
-      -- coreLift $ putStrLn $ rustName n 
-      -- pure ()
-
-  -- coreLift $ putStrLn $ show $ gdef.type
-  -- let argsStr = String.Extra.join ", " $ 
-  --        map (\x => "val_v" ++ show x ++ ": &IdrisType") args 
-  let fn = "fn \{rustName name}<'a>(args: Vec<IdrisType<'a>>) -> IdrisType<'a> {"
+  let fn = "fn \{rustName name}(args: Vec<IdrisType>) -> IdrisType {"
 
   coreLift $ putStrLn $ fn
 
@@ -390,15 +357,9 @@ createRustFunctions (name, MkAFun args anf) = do
 createRustFunctions (name, MkACon tag arity nt) = do
   pure ()
 createRustFunctions (n, MkAForeign ccs fargs ret) = do
-  -- coreLift $ putStrLn $ "MkAForeign not implemented yet"
-  -- coreLift $ putStrLn $ show n
-  -- coreLift $ putStrLn $ show ccs
-  -- coreLift $ putStrLn $ show fargs
-  -- coreLift $ putStrLn $ show ret
   pure ()
 createRustFunctions (n, MkAError exp) = throw $ InternalError "Error with expression: \{show exp}"
 -- not really total but this way this internal error does not contaminate everything else
-
 
 generateRustSourceFile : {auto ctxt : Ref Ctxt Defs}
                        -> {auto s : Ref Syn SyntaxInfo}
@@ -417,12 +378,6 @@ compile :
 compile _ defs _ outputDir term outfile = do
   compData <- getCompileData False ANF term
   let defs = anf compData
-  let ndefs = namedDefs compData
-  let ldefs = lambdaLifted compData
-  -- coreLift $ putStrLn $ show defs
-  -- coreLift $ putStrLn $ show ldefs
-  -- coreLift $ putStrLn $ show ndefs
-  -- coreLift $ putStrLn $ show $ vmcode compData
 
   generateRustSourceFile defs
   pure Nothing
