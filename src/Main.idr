@@ -65,6 +65,10 @@ mapWithIndex f xs = go 0 xs
     go _ [] = []
     go i (x :: xs) = f i x :: go (i + 1) xs
 
+rustAVar : AVar -> String
+rustAVar (ALocal i) = "val_v" ++ show i
+rustAVar ANull = "IdrisType::None"
+
 showRustCleanStringChar : Char -> String -> String
 showRustCleanStringChar ' ' = ("_" ++)
 showRustCleanStringChar '!' = ("_bang" ++)
@@ -143,6 +147,23 @@ rustType CharType = "Char"
 rustType DoubleType = "Double"
 rustType WorldType = "World"
 
+rustTypeName : Name -> String
+rustTypeName (UN (Basic "Int")) = "IntType"
+rustTypeName (UN (Basic "Int8")) = "IntType"
+rustTypeName (UN (Basic "Int16")) = "IntType"
+rustTypeName (UN (Basic "Int32")) = "IntType"
+rustTypeName (UN (Basic "Int64")) = "IntType"
+rustTypeName (UN (Basic "Integer")) = "IntType"
+rustTypeName (UN (Basic "Bits8")) = "IntType"
+rustTypeName (UN (Basic "Bits16")) = "IntType"
+rustTypeName (UN (Basic "Bits32")) = "IntType"
+rustTypeName (UN (Basic "Bits64")) = "IntType"
+rustTypeName (UN (Basic "String")) = "StringType"
+rustTypeName (UN (Basic "Char")) = "CharType"
+rustTypeName (UN (Basic "Double")) = "DoubleType"
+rustTypeName (UN (Basic "World")) = "WorldType"
+rustTypeName _ = "Unexpected name"
+
 rustPrimType : PrimType -> String
 rustPrimType t = "IdrisMetaType::\{rustType t}"
 
@@ -160,7 +181,7 @@ rustConstant (B64 m) = "IdrisType::Int(\{show m})"
 rustConstant (Str str) = "IdrisType::String(\{show str}.to_string())"
 rustConstant (Ch c) = "IdrisType::Char(\{show c})"
 rustConstant (Db dbl) = "IdrisType::Double(\{show dbl})"
-rustConstant (PrT pty) = rustPrimType pty
+rustConstant (PrT pty) = "IdrisType::Type(\{rustPrimType pty})"
 rustConstant WorldVal = "IdrisType::World"
 
 rustOp : {0 arity : Nat} -> PrimFn arity -> Vect arity String -> String
@@ -202,7 +223,7 @@ rustOp StrCons       [x, y]    = "strCons(vec![" ++ x ++ ", " ++ y ++ "])"
 rustOp StrAppend     [x, y]    = "strAppend(vec![" ++ x ++ ", " ++ y ++ "])"
 rustOp StrSubstr     [x, y, z] = "strSubstr(vec![" ++ x ++ ", " ++ y  ++ ", " ++ z ++ "])"
 rustOp BelieveMe     [_, _, x] = x
-rustOp Crash         [_, msg]  = "idris2_crash(vec![" ++ msg ++ "]);"
+rustOp Crash         [_, msg]  = "idris2_crash(vec![" ++ msg ++ "])"
 rustOp fn args = show fn ++ "(vec![" ++ (showSep ", " $ toList args) ++ "])"
 
 rustStatementsFromANF : {auto a : Ref ArgCounter Nat} 
@@ -218,7 +239,7 @@ rustStatementsFromANF (AUnderApp fc name missing args) = do
   let argsStr = String.Extra.join ", " $ 
          map (\x => "val_" ++ show x ++ ".clone()") args
   pure "IdrisType::Function(\{show missing}, vec![\{argsStr}], \{rustName name})"
-rustStatementsFromANF (AApp fc _ closure arg) = pure $ "idris2_apply_closure(\{"&val_" ++ show closure}, \{"&val_" ++ show arg})"
+rustStatementsFromANF (AApp fc _ closure arg) = pure $ "idris2_apply_closure(\{"&val_" ++ show closure}, \{"&" ++ rustAVar arg})"
 rustStatementsFromANF (ALet fc var value body) = do 
   valueStr <- rustStatementsFromANF value
   let defStr = "let \{"val_v" ++ show var} = \{valueStr};"
@@ -227,7 +248,9 @@ rustStatementsFromANF (ALet fc var value body) = do
 rustStatementsFromANF (ACon fc name coninfo tag args) = do
   let argsStr = String.Extra.join ", " $ 
     mapWithIndex (\ind, x => "\{"val_" ++ show x}.clone()") args 
-  pure "IdrisType::Struct(\{maybe "-1" show tag}, vec![\{argsStr}])"
+  case tag of 
+       Nothing => pure "IdrisType::Type(IdrisMetaType::\{rustTypeName name})"
+       Just tag' => pure "IdrisType::Struct(\{show tag'}, vec![\{argsStr}])"
 rustStatementsFromANF (AOp fc _ op args) = do 
   let argsStr = map (\x => "val_" ++ show x ++ ".clone()") args 
   let ret = rustOp op argsStr
@@ -239,7 +262,7 @@ rustStatementsFromANF (AConCase fc sc alts mDef) = do
   coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.clone() {"
   _ <- foldlC (\els, (MkAConAlt name coninfo tag args body) => do
       case tag of 
-           Nothing => coreLift $ putStrLn $ "Unexpected empyt tag"
+           Nothing => coreLift $ putStrLn $ "IdrisType::Type(IdrisMetaType::\{rustTypeName name}) => {"
            Just tag' => coreLift $ putStrLn $ "IdrisType::Struct(\{show tag'}, args) => {"
 
       _ <- foldlC (\k, arg => do
@@ -324,7 +347,6 @@ header = do
     coreLift $ putStrLn $ """
         mod support;
         use core::panic;
-        use std::rc::Rc;
         use support::*;
         """
 
