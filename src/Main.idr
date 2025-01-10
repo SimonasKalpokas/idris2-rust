@@ -325,6 +325,15 @@ termToRustNames (PrimVal fc c) = [show c]
 termToRustNames (Erased fc why) = ?termToRustNames_rhs_10
 termToRustNames (TType fc n) = [show n]
 
+header : Core ()
+header = do
+    coreLift $ putStrLn $ """
+        mod support;
+        use core::panic;
+        use std::rc::Rc;
+        use support::*;
+        """
+
 footer : Core ()
 footer = do
     coreLift $ putStrLn $ """
@@ -397,14 +406,15 @@ generateRustSourceFile : {auto ctxt : Ref Ctxt Defs}
                        -> Core ()
 generateRustSourceFile defs = do
   _ <- newRef ArgCounter 0
+  header
   traverse_ createRustFunctions defs
-
+  footer
 
 compile :
   Ref Ctxt Defs -> Ref Syn SyntaxInfo ->
   (tmpDir : String) -> (execDir : String) ->
   ClosedTerm -> (outfile : String) -> Core (Maybe String)
-compile syn defs tmp dir term file = do 
+compile _ defs _ outputDir term outfile = do
   compData <- getCompileData False ANF term
   let defs = anf compData
   let ndefs = namedDefs compData
