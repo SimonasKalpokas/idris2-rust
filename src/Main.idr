@@ -41,6 +41,11 @@ rangeNat n = go n []
     go Z acc = acc
     go (S n) acc = go n (n :: acc)
 
+isTagged : List AConAlt -> Bool
+isTagged [] = False
+isTagged (MkAConAlt _ _ (Just _) _ _:: _) = True
+isTagged (MkAConAlt _ _ Nothing _ _ :: _) = False
+
 integer_switch : List AConstAlt -> Bool
 integer_switch [] = True
 integer_switch (MkAConstAlt c _  :: _) =
@@ -58,6 +63,25 @@ integer_switch (MkAConstAlt c _  :: _) =
         (Ch x) => True
         _ => False
 
+switch_type : List AConstAlt -> Constant
+switch_type [] = WorldVal
+switch_type (MkAConstAlt c _  :: _) =
+    case c of
+        (I x) => I x
+        (I8 x) => I8 x
+        (I16 x) => I16 x
+        (I32 x) => I32 x
+        (I64 x) => I64 x
+        (B8 x) => B8 x
+        (B16 x) => B16 x
+        (B32 x) => B32 x
+        (B64 x) => B64 x
+        (BI x) => BI x
+        (Ch x) => Ch x
+        (Str x) => Str x
+        (Db x) => Db x
+        _ => WorldVal
+
 mapWithIndex : (Nat -> a -> b) -> List a -> List b
 mapWithIndex f xs = go 0 xs
   where
@@ -67,7 +91,7 @@ mapWithIndex f xs = go 0 xs
 
 rustAVar : AVar -> String
 rustAVar (ALocal i) = "val_v" ++ show i
-rustAVar ANull = "IdrisType::None"
+rustAVar ANull = "Rc::new(()) as Rc<dyn Any>"
 
 showRustCleanStringChar : Char -> String -> String
 showRustCleanStringChar ' ' = ("_" ++)
@@ -167,22 +191,25 @@ rustTypeName _ = "Unexpected name"
 rustPrimType : PrimType -> String
 rustPrimType t = "IdrisMetaType::\{rustType t}"
 
+showConstant : Constant -> String
+showConstant (I i) = show i
+showConstant (I8 i) = show i
+showConstant (I16 i) = show i
+showConstant (I32 i) = show i
+showConstant (I64 i) = show i
+showConstant (BI i) = show i
+showConstant (B8 m) = show m
+showConstant (B16 m) = show m
+showConstant (B32 m) = show m
+showConstant (B64 m) = show m
+showConstant (Str str) = "\{show str}.to_string()"
+showConstant (Ch c) = show c
+showConstant (Db dbl) = show dbl
+showConstant (PrT pty) = rustPrimType pty
+showConstant WorldVal = "()"
+
 rustConstant : Constant -> String
-rustConstant (I i) = "IdrisType::Int(\{show i})"
-rustConstant (I8 i) = "IdrisType::Int(\{show i})"
-rustConstant (I16 i) = "IdrisType::Int(\{show i})"
-rustConstant (I32 i) = "IdrisType::Int(\{show i})"
-rustConstant (I64 i) = "IdrisType::Int(\{show i})"
-rustConstant (BI i) = "IdrisType::Int(\{show i})"
-rustConstant (B8 m) = "IdrisType::Int(\{show m})"
-rustConstant (B16 m) = "IdrisType::Int(\{show m})"
-rustConstant (B32 m) = "IdrisType::Int(\{show m})"
-rustConstant (B64 m) = "IdrisType::Int(\{show m})"
-rustConstant (Str str) = "IdrisType::String(\{show str}.to_string())"
-rustConstant (Ch c) = "IdrisType::Char(\{show c})"
-rustConstant (Db dbl) = "IdrisType::Double(\{show dbl})"
-rustConstant (PrT pty) = "IdrisType::Type(\{rustPrimType pty})"
-rustConstant WorldVal = "IdrisType::World"
+rustConstant c = "Rc::new(\{showConstant c}) as Rc<dyn Any>"
 
 rustOp : {0 arity : Nat} -> PrimFn arity -> Vect arity String -> String
 rustOp (Neg ty)      [x]       = "idris2_negate_"  ++  rustType ty ++ "(vec![" ++ x ++ "])"
@@ -233,13 +260,17 @@ rustStatementsFromANF (AV fc x) = pure $ "val_" ++ show x ++ ".clone()"
 rustStatementsFromANF (AAppName fc _ n args) = do
   let argsStr = String.Extra.join ", " $ 
          map (\x => "val_" ++ show x ++ ".clone()") args 
-  pure "\{rustName n}(vec![\{argsStr}])"
+  pure "\{rustName n}(\{argsStr})"
 
 rustStatementsFromANF (AUnderApp fc name missing args) = do
   let argsStr = String.Extra.join ", " $ 
          map (\x => "val_" ++ show x ++ ".clone()") args
-  pure "IdrisType::Function(\{show missing}, vec![\{argsStr}], \{rustName name})"
-rustStatementsFromANF (AApp fc _ closure arg) = pure $ "idris2_apply_closure(\{"&val_" ++ show closure}, \{"&" ++ rustAVar arg})"
+  let fnArgsLen = length args + missing
+  let fnArgsStr = String.Extra.join ", " $ 
+         map (\x => "Rc<dyn Any>") [1..fnArgsLen]
+  let fnType = "fn(\{fnArgsStr}) -> Rc<dyn Any>"
+  pure "Rc::new((\{show missing}, vec![\{argsStr}] as Vec<Rc<dyn Any>>, Rc::new(\{rustName name} as \{fnType}) as Rc<dyn Any>)) as Rc<dyn Any>"
+rustStatementsFromANF (AApp fc _ closure arg) = pure $ "idris2_apply_closure(\{"&val_" ++ show closure}, \{rustAVar arg}.clone())"
 rustStatementsFromANF (ALet fc var value body) = do 
   valueStr <- rustStatementsFromANF value
   let defStr = "let \{"val_v" ++ show var} = \{valueStr};"
@@ -249,8 +280,8 @@ rustStatementsFromANF (ACon fc name coninfo tag args) = do
   let argsStr = String.Extra.join ", " $ 
     mapWithIndex (\ind, x => "\{"val_" ++ show x}.clone()") args 
   case tag of 
-       Nothing => pure "IdrisType::Type(IdrisMetaType::\{rustTypeName name})"
-       Just tag' => pure "IdrisType::Struct(\{show tag'}, vec![\{argsStr}])"
+       Nothing => pure "Rc::new(IdrisMetaType::\{rustTypeName name}) as Rc<dyn Any>"
+       Just tag' => pure "Rc::new((\{show tag'}, vec![\{argsStr}] as Vec<Rc<dyn Any>>)) as Rc<dyn Any>"
 rustStatementsFromANF (AOp fc _ op args) = do 
   let argsStr = map (\x => "val_" ++ show x ++ ".clone()") args 
   let ret = rustOp op argsStr
@@ -259,11 +290,13 @@ rustStatementsFromANF (AExtPrim fc lazy n xs) = ?rustStatementsFromANF_rhs_7
 rustStatementsFromANF (AConCase fc sc alts mDef) = do
   let sc' = "val_" ++ show sc
   tmpRetName <- getTmpVarName
-  coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.clone() {"
+  case isTagged alts of
+       False => coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.downcast_ref::<IdrisMetaType>() {"
+       True => coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.downcast_ref::<(i32, Vec<Rc<dyn Any>>)>() {"
   _ <- foldlC (\els, (MkAConAlt name coninfo tag args body) => do
       case tag of 
-           Nothing => coreLift $ putStrLn $ "IdrisType::Type(IdrisMetaType::\{rustTypeName name}) => {"
-           Just tag' => coreLift $ putStrLn $ "IdrisType::Struct(\{show tag'}, args) => {"
+           Nothing => coreLift $ putStrLn $ "Some(IdrisMetaType::\{rustTypeName name}) => {"
+           Just tag' => coreLift $ putStrLn $ "Some((\{show tag'}, args)) => {"
 
       _ <- foldlC (\k, arg => do
           coreLift $ putStrLn $ "let \{"val_v" ++ show arg} = args.get(\{show k}).unwrap().clone();"
@@ -288,11 +321,16 @@ rustStatementsFromANF (AConCase fc sc alts mDef) = do
 rustStatementsFromANF (AConstCase fc sc alts mDef) = do
   let sc' = "val_" ++ show sc
   tmpRetName <- getTmpVarName
-  coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.clone() {"
+  case integer_switch alts of
+      True => coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.downcast_ref::<i32>() {"
+      False => case switch_type alts of
+          Str x => coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.downcast_ref::<String>() {"
+          Db  x => coreLift $ putStrLn $ "let \{tmpRetName} = match \{sc'}.downcast_ref::<f64>() {"
+          x => throw $ InternalError "[refc] AConstCase : unsupported type. \{show fc} \{show x}"
   case integer_switch alts of
       True => do
           _ <- foldlC (\els, (MkAConstAlt c body) => do
-              coreLift $ putStrLn $ "IdrisType::Int(\{show c}) => {"
+              coreLift $ putStrLn $ "Some(\{show c}) => {"
               b <- rustStatementsFromANF body
               coreLift $ putStrLn $ b
               coreLift $ putStrLn "}"
@@ -302,8 +340,8 @@ rustStatementsFromANF (AConstCase fc sc alts mDef) = do
       False => do
           _ <- foldlC (\els, (MkAConstAlt c body) => do
               case c of
-                  Str x => coreLift $ putStrLn $ "IdrisType::String(ref s) if s == \{show x} => {"
-                  Db  x => coreLift $ putStrLn $ "IdrisType::Double(\{show x}) => {"
+                  Str x => coreLift $ putStrLn $ "Some(ref s) if *s == \{show x} => {"
+                  Db  x => coreLift $ putStrLn $ "Some(\{show x}) => {"
                   x => throw $ InternalError "[refc] AConstCase : unsupported type. \{show fc} \{show x}"
               b <- rustStatementsFromANF body
               coreLift $ putStrLn $ b
@@ -324,7 +362,7 @@ rustStatementsFromANF (AConstCase fc sc alts mDef) = do
   pure tmpRetName
 
 rustStatementsFromANF (APrimVal fc cst) = pure $ "\{rustConstant cst}"
-rustStatementsFromANF (AErased fc) = pure "IdrisType::None"
+rustStatementsFromANF (AErased fc) = pure "Rc::new(()) as Rc<dyn Any>"
 rustStatementsFromANF (ACrash fc str) = ?rustStatementsFromANF_rhs_12
 
 termToRustNames : {vars: _} -> Term vars -> List String
@@ -355,7 +393,7 @@ footer = do
     coreLift $ putStrLn $ """
         // main function
         fn main() {
-          __mainExpression_0(vec![]);
+          __mainExpression_0();
         }
         """
 
@@ -365,13 +403,15 @@ createRustFunctions : {auto c : Ref Ctxt Defs}
                     -> (Name, ANFDef)
                     -> Core ()
 createRustFunctions (name, MkAFun args anf) = do 
-  let fn = "fn \{rustName name}(args: Vec<IdrisType>) -> IdrisType {"
+  let argsStr = String.Extra.join ", " $ 
+         map (\x => "val_v" ++ show x ++ ": Rc<dyn Any>") args
+  let fn = "fn \{rustName name}(\{argsStr}) -> Rc<dyn Any> {"
 
   coreLift $ putStrLn $ fn
 
-  let argsStrs = mapWithIndex (\ind, x => "let \{"val_v" ++ show x} = args.get(\{show ind}).unwrap().clone();") args
-
-  _ <- traverse (coreLift . putStrLn) argsStrs
+  -- let argsStrs = mapWithIndex (\ind, x => "let \{"val_v" ++ show x} = args.get(\{show ind}).unwrap().clone();") args
+  --
+  -- _ <- traverse (coreLift . putStrLn) argsStrs
   value <- rustStatementsFromANF anf
   coreLift $ putStrLn $ "return " ++ value ++ ";"
   coreLift $ putStrLn $ "}"
